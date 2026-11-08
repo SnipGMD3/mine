@@ -130,6 +130,7 @@ const Lob={peer:null,conn:null,isB:false,items:{},reg:null,cb:null,rx:0,on:false
   start(){if(this.on)return;this.on=true;setInterval(()=>this.tick(),5000);this.become()},
   become(){
     const p=new Peer(LB);
+    p.on("disconnected",()=>{try{p.reconnect()}catch(x){}});
     p.on("open",()=>{this.peer=p;this.isB=true;this.conn=null;this.items={};p.on("connection",c=>c.on("data",d=>this.serve(c,d)));this.up()});
     p.on("error",e=>{
       try{p.destroy()}catch(x){}
@@ -192,21 +193,30 @@ const Net={on:false,kind:"",
       const un=room.on("g",m=>{if(!m.isMe)handler(m.data)});
       return{emit:d=>room.emit("g",d),leave(){try{un()}catch(e){}try{room.leave()}catch(e){}}};
     }
+    const why=e=>{const t=e&&e.type;return t==="peer-unavailable"?"Хост с таким кодом не найден: он должен быть на экране «Играть».":t==="unavailable-id"?"Этот код уже занят (возможно, открыта другая вкладка).":["network","server-error","socket-error","socket-closed"].includes(t)?"Нет связи с сервером соединений PeerJS.":t==="timeout"?"Соединение не установилось: возможно, мешает сеть или роутер.":"Ошибка соединения"+(t?" ("+t+")":"")+"."};
     return new Promise((res,rej)=>{
-      setTimeout(()=>rej(new Error("timeout")),12000);
+      let p=null,settled=false,tries=0;
+      const ok=v=>{settled=true;res(v)};
+      const fail=e=>{if(settled)return;settled=true;try{p&&p.destroy()}catch(x){}rej(new Error(why(e)))};
+      setTimeout(()=>fail({type:"timeout"}),15000);
       if(host){
-        const conns={},p=new Peer("mineg-"+code);
+        const conns={};
         const emit=d=>{(d.to?[conns[d.to]]:Object.values(conns)).forEach(c=>c&&c.open&&c.send(d))};
-        p.on("error",rej);
-        p.on("open",()=>res({emit,leave(){p.destroy()}}));
-        p.on("connection",c=>c.on("data",d=>{if(d&&d.id)conns[d.id]=c;handler(d)}));
+        const make=()=>{
+          p=new Peer("mineg-"+code);
+          p.on("error",e=>{if(e.type==="unavailable-id"&&!settled&&tries++<3){try{p.destroy()}catch(x){}setTimeout(make,2500)}else fail(e)});
+          p.on("disconnected",()=>{try{p.reconnect()}catch(x){}});
+          p.on("open",()=>ok({emit,leave(){p.destroy()}}));
+          p.on("connection",c=>c.on("data",d=>{if(d&&d.id)conns[d.id]=c;handler(d)}));
+        };
+        make();
       }else{
-        const p=new Peer();
-        p.on("error",rej);
+        p=new Peer();
+        p.on("error",fail);
         p.on("open",()=>{
           const c=p.connect("mineg-"+code,{reliable:true});
-          c.on("open",()=>res({emit:d=>c.open&&c.send(d),leave(){p.destroy()}}));
-          c.on("data",handler);c.on("close",()=>handler({t:"gone"}));
+          c.on("open",()=>ok({emit:d=>c.open&&c.send(d),leave(){p.destroy()}}));
+          c.on("data",handler);c.on("close",()=>handler({t:"gone"}));c.on("error",fail);
         });
       }
     });
@@ -268,7 +278,7 @@ setInterval(()=>{if(!$("pool").classList.contains("hide"))renderPool()},10000);
 // ---------- хост ----------
 async function startHost(){
   closePool();await ready;mode="host";target=null;thieves={};show("game");$("title").textContent="Рудник · код "+S.code;say("");
-  if(Net.on){try{room=await Net.join(S.code,onHost,true)}catch(e){room=null;say("Онлайн недоступен, игра без сети.")}}
+  if(Net.on){try{room=await Net.join(S.code,onHost,true)}catch(e){room=null;say("Без сети: "+((e&&e.message)||"онлайн недоступен"))}}
   beat();hb=setInterval(beat,15000);
   sweep=setInterval(()=>{let ch=false;for(const k in thieves)if(Date.now()-thieves[k].seen>25000){delete thieves[k];ch=true}if(ch)render()},3000);
   render();
@@ -305,7 +315,7 @@ async function startSteal(p){
   if((S.bans[p.id]||0)>Date.now())return;
   closePool();await ready;if(!Net.on){$("menuMsg").textContent="Онлайн не настроен.";return}mode="steal";target=p;gotProg=false;vProg=0;vDrop=false;show("game");
   $("title").textContent="Рудник: "+(p.name||"Игрок");say("Подкрадываемся…");
-  try{room=await Net.join(p.id,onThief,false)}catch(e){leave("Не удалось подключиться.");return}
+  try{room=await Net.join(p.id,onThief,false)}catch(e){leave((e&&e.message)||"Не удалось подключиться.");return}
   const enter=()=>emit({t:"enter",id:S.id,name:S.name});
   enter();hb=setInterval(enter,8000);
   setTimeout(()=>{if(mode==="steal"&&!gotProg)say("Хост не отвечает — возможно, он ушёл.")},7000);
