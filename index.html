@@ -1,0 +1,349 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Рудник</title>
+<style>
+:root{box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);--bg:#f3efe7;--fg:#2a251f;--card:#fffdf8;--mut:#7b7266;--acc:#b5651d;--line:#ddd3c3;--bar:#e5ddcf}
+@media(prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#15120e;--fg:#ece5d8;--card:#1f1b15;--mut:#9a9183;--acc:#e0914a;--line:#342e25;--bar:#2c261e}}
+:root[data-theme="dark"]{--bg:#15120e;--fg:#ece5d8;--card:#1f1b15;--mut:#9a9183;--acc:#e0914a;--line:#342e25;--bar:#2c261e}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.4 system-ui,-apple-system,"Segoe UI",sans-serif;min-height:100vh}
+.wrap{max-width:480px;margin:0 auto;padding:20px 16px}
+h1{font-size:34px;text-align:center;margin:40px 0 28px}
+button{font:inherit;color:inherit;cursor:pointer}
+.btn{display:block;width:100%;padding:15px;margin:10px 0;border-radius:12px;border:1px solid var(--line);background:var(--card);font-size:18px}
+.btn.main{background:var(--acc);border-color:var(--acc);color:#fff}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px 14px;margin:10px 0}
+.row{display:flex;justify-content:space-between;align-items:center;gap:10px}
+.mut{color:var(--mut);font-size:14px}
+.bar{height:10px;background:var(--bar);border-radius:6px;overflow:hidden;margin:4px 0 10px}
+.bar i{display:block;height:100%;background:var(--acc);width:0}
+.small{padding:8px 14px;border-radius:8px;border:1px solid var(--line);background:var(--card)}
+.hide{display:none!important}
+#ring{vertical-align:middle;margin-left:6px}
+#ring circle{fill:none;stroke-width:3}
+#ringF{stroke:var(--acc);transition:stroke-dashoffset 1s linear;transform:rotate(-90deg);transform-origin:50% 50%}
+#stage{position:relative;height:310px;display:flex;justify-content:center;align-items:flex-end;margin-top:14px}
+#rock{border:0;background:none;padding:0;-webkit-tap-highlight-color:transparent;touch-action:manipulation}
+#rockImg{height:300px;display:block;user-select:none;-webkit-user-drag:none}
+#rock.hit{animation:s .12s}
+@keyframes s{50%{transform:translateX(4px) rotate(1.2deg)}}
+.itm{padding:8px 12px;border-radius:10px;background:var(--card);border:2px solid var(--acc);font-size:14px;text-align:center}
+.itm img{width:44px;height:44px;display:block}
+#floor{position:absolute;left:50%;bottom:10px;transform:translateX(-50%);animation:fall .8s ease-out;cursor:pointer}
+@keyframes fall{0%{transform:translate(-50%,-170px);opacity:0}55%{transform:translate(-50%,0);opacity:1}72%{transform:translate(-50%,-22px)}100%{transform:translate(-50%,0)}}
+.fly{position:fixed;z-index:60;pointer-events:none;transition:transform .65s ease-in,opacity .65s}
+#bInv.pop{animation:pop .3s}
+@keyframes pop{50%{transform:scale(1.2)}}
+#thieves{min-height:46px;display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin:8px 0}
+.thief{border:1px dashed var(--acc);background:var(--card);border-radius:10px;padding:6px 10px;font-size:14px}
+#msg{text-align:center;min-height:22px;color:var(--acc)}
+#invModal{position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:40;display:flex;align-items:center;justify-content:center;padding:16px}
+#invBox{background:var(--bg);border:1px solid var(--line);border-radius:14px;padding:14px;width:100%;max-width:420px}
+#grid{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-top:10px}
+.slot{aspect-ratio:1;border:1px dashed var(--line);border-radius:10px;display:flex;align-items:center;justify-content:center;position:relative;font-size:12px;text-align:center;overflow:hidden}
+.slot.f{border:1px solid var(--acc);background:var(--card)}
+.slot .itm{border:0;background:none;padding:2px}
+.slot b{position:absolute;right:4px;bottom:2px;font-size:12px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div id="menu">
+    <h1>⛏ Рудник</h1>
+    <button class="btn main" id="bPlay">Играть</button>
+    <button class="btn" id="bSneak">Пробраться</button>
+    <div id="menuMsg" class="mut" style="text-align:center"></div>
+    <div id="pool" class="hide">
+      <div class="row"><b>Активные рудники</b><button class="small" id="bClose">Закрыть</button></div>
+      <div id="poolList"></div>
+    </div>
+  </div>
+
+  <div id="game" class="hide">
+    <div class="row"><button class="small" id="bBack">← Меню</button><b id="title"></b><button class="small" id="bInv">🎒 Инвентарь</button></div>
+    <div class="row" style="margin-top:14px"><span>Стамина <b id="stamTxt"></b></span>
+      <svg id="ring" width="22" height="22" viewBox="0 0 22 22"><circle cx="11" cy="11" r="8" stroke="var(--bar)"/><circle id="ringF" cx="11" cy="11" r="8" stroke-dasharray="50.27" stroke-dashoffset="50.27"/></svg>
+    </div>
+    <div class="bar"><i id="stamBar"></i></div>
+    <div id="stage"><button id="rock" aria-label="Рудник"><img id="rockImg" alt="" draggable="false"></button></div>
+    <div id="thieves"></div>
+    <div id="msg"></div>
+  </div>
+</div>
+
+<div id="invModal" class="hide">
+  <div id="invBox">
+    <div class="row"><b>Инвентарь</b><button class="small" id="bInvClose">✕</button></div>
+    <div class="mut" id="pick"></div>
+    <div id="grid"></div>
+  </div>
+</div>
+
+<script>
+const ORES=[["Grath",50],["Grathen",30],["Korath",15],["Korashen",4],["Velgrun",.8],["Velgrath",.2]];
+const KEY="mine_save_v1",NEED=50,CRACK=25,BAN=3600000,SLOTS=20;
+const SPR=["assets/rock_full.png","assets/rock_cracked.png","assets/rock_broken.png"];
+// Онлайн для GitHub Pages: адрес Firebase Realtime Database, например "https://my-game-default-rtdb.europe-west1.firebasedatabase.app"
+const FIREBASE_URL="";
+const $=id=>document.getElementById(id);
+SPR.forEach(s=>{new Image().src=s});
+
+// ---------- сохранение (локально в браузере) ----------
+function genChances(){
+  for(let t=0;t<800;t++){
+    const r=ORES.map(([,b])=>b*(1+(Math.random()*2-1)*.5));
+    const sum=r.reduce((a,b)=>a+b,0);
+    const u=r.map(x=>x/sum*10000);
+    if(!u.every((x,i)=>Math.abs(x/100-ORES[i][1])<=ORES[i][1]*.5))continue;
+    const f=u.map(Math.floor);
+    const rem=10000-f.reduce((a,b)=>a+b,0);
+    u.map((x,i)=>[x-f[i],i]).sort((a,b)=>b[0]-a[0]).slice(0,rem).forEach(([,i])=>f[i]++);
+    return f; // сотые доли процента, сумма ровно 10000
+  }
+  return ORES.map(o=>Math.round(o[1]*100));
+}
+let S=null;try{S=JSON.parse(localStorage.getItem(KEY))}catch(e){}
+if(!S)S={id:Math.random().toString(36).slice(2,10)+Date.now().toString(36),name:"Шахтёр-"+(1000+Math.floor(Math.random()*9000)),
+  stamina:100,at:Date.now(),progress:0,drop:null,chances:genChances(),inv:{},bans:{},pick:"Деревянная кирка"};
+if(S.drop===undefined)S.drop=null;
+function save(){try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}}
+save();
+function roll(){let r=Math.random()*10000,c=0;for(let i=0;i<ORES.length;i++){c+=S.chances[i];if(r<c)return ORES[i][0]}return ORES[0][0]}
+function regen(){
+  if(S.stamina>=100){S.stamina=100;S.at=Date.now();return}
+  const m=Math.floor((Date.now()-S.at)/60000);
+  if(m>0){S.stamina=Math.min(100,S.stamina+m);S.at=S.stamina>=100?Date.now():S.at+m*60000}
+}
+function spend(){if(S.stamina>=100)S.at=Date.now();S.stamina--}
+
+// ---------- сеть (подключаемый слой) ----------
+// "c" — предпросмотр в Claude; "f" — Firebase Realtime Database (REST), работает со статичного хостинга GitHub Pages.
+const Net={on:false,kind:"",
+  async init(){
+    if(window.claude){try{this.db=await claude.use("db");this.rt=await claude.use("room");if(this.db&&this.rt){this.on=true;this.kind="c"}}catch(e){}}
+    else if(FIREBASE_URL){this.on=true;this.kind="f"}
+    return this.on;
+  },
+  beat(id,d){
+    if(this.kind==="c")this.db.doc("sessions/"+id).set(d).catch(()=>{});
+    else if(this.kind==="f")fetch(FIREBASE_URL+"/sessions/"+id+".json",{method:"PUT",body:JSON.stringify(d)}).catch(()=>{});
+  },
+  drop(id){
+    if(this.kind==="c")this.db.doc("sessions/"+id).delete().catch(()=>{});
+    else if(this.kind==="f")fetch(FIREBASE_URL+"/sessions/"+id+".json",{method:"DELETE",keepalive:true}).catch(()=>{});
+  },
+  lobby(cb,err){
+    if(this.kind==="c"){
+      return this.db.collection("sessions").onSnapshot(s=>cb(s.docs.map(d=>Object.assign({id:d.id},d.data()))),err);
+    }
+    let map={};const es=new EventSource(FIREBASE_URL+"/sessions.json");
+    const push=()=>cb(Object.entries(map).map(([id,v])=>Object.assign({id},v)));
+    es.addEventListener("put",e=>{const{path,data}=JSON.parse(e.data);if(path==="/")map=data||{};else if(data===null)delete map[path.slice(1)];else map[path.slice(1)]=data;push()});
+    es.addEventListener("patch",e=>{const{path,data}=JSON.parse(e.data);if(path==="/"){Object.assign(map,data);push()}});
+    es.onerror=()=>{if(es.readyState===2&&err)err()};
+    return()=>es.close();
+  },
+  async join(rid,handler){
+    if(this.kind==="c"){
+      const room=await this.rt.join("mine-"+rid);
+      const un=room.on("g",m=>{if(!m.isMe)handler(m.data)});
+      return{emit:d=>room.emit("g",d),leave(){try{un()}catch(e){}try{room.leave()}catch(e){}}};
+    }
+    const base=FIREBASE_URL+"/rooms/"+rid+"/m";
+    const es=new EventSource(base+".json");let first=true;const seen=new Set();
+    es.addEventListener("put",e=>{
+      const{path,data}=JSON.parse(e.data);
+      if(first){first=false;if(data&&path==="/")Object.keys(data).forEach(k=>seen.add(k));return}
+      const k=path.slice(1);
+      if(path==="/"||k.includes("/")||seen.has(k)||!data)return;
+      seen.add(k);handler(data);
+    });
+    return{
+      emit:d=>fetch(base+".json",{method:"POST",body:JSON.stringify(d)}).then(r=>r.json())
+        .then(j=>setTimeout(()=>fetch(base+"/"+j.name+".json",{method:"DELETE"}).catch(()=>{}),15000)).catch(()=>{}),
+      leave(){es.close()}
+    };
+  }
+};
+const ready=Net.init();
+
+let room=null,mode="menu",target=null,thieves={},hb=null,sweep=null,unsubPool=null,pool=[],gotProg=false,vProg=0,vDrop=false;
+const emit=d=>{try{room&&room.emit(d)}catch(e){}};
+function show(id){["menu","game"].forEach(x=>$(x).classList.toggle("hide",x!==id))}
+function say(t){$("msg").textContent=t||""}
+
+// ---------- предметы, полёт в инвентарь ----------
+function itemEl(name,withImg){
+  const d=document.createElement("div");d.className="itm";d.textContent=name;
+  if(withImg){const i=new Image();i.alt=name;i.onload=()=>{d.textContent="";d.append(i)};i.src="assets/ores/"+name+".png"} // картинки руд: assets/ores/<Имя>.png
+  return d;
+}
+function fly(name,r){
+  const t=$("bInv").getBoundingClientRect(),e=itemEl(name,false);
+  e.classList.add("fly");e.style.left=r.left+"px";e.style.top=r.top+"px";document.body.append(e);
+  requestAnimationFrame(()=>requestAnimationFrame(()=>{
+    e.style.transform="translate("+(t.left+t.width/2-r.left-r.width/2)+"px,"+(t.top-r.top)+"px) scale(.3)";e.style.opacity=".2";
+  }));
+  setTimeout(()=>{e.remove();const b=$("bInv");b.classList.add("pop");setTimeout(()=>b.classList.remove("pop"),300)},680);
+}
+
+// ---------- меню ----------
+$("bPlay").onclick=()=>startHost();
+$("bSneak").onclick=async()=>{
+  await ready;$("menuMsg").textContent="";$("pool").classList.remove("hide");
+  if(!Net.on){$("poolList").textContent="Онлайн не настроен.";return}
+  if(unsubPool)unsubPool();
+  try{unsubPool=Net.lobby(l=>{pool=l;renderPool()},()=>{$("poolList").textContent="Не удалось загрузить список."})}catch(e){$("poolList").textContent="Не удалось загрузить список."}
+};
+$("bClose").onclick=closePool;
+function closePool(){$("pool").classList.add("hide");if(unsubPool){unsubPool();unsubPool=null}}
+function renderPool(){
+  const box=$("poolList");box.textContent="";
+  const live=pool.filter(p=>p.id!==S.id&&Date.now()-(p.seen||0)<45000);
+  if(!live.length){const d=document.createElement("div");d.className="mut card";d.textContent="Сейчас нет активных рудников.";box.append(d);return}
+  live.forEach(p=>{
+    const ban=(S.bans[p.id]||0)-Date.now();
+    const c=document.createElement("div");c.className="card row";
+    const n=document.createElement("div");n.textContent=p.name||"Игрок";
+    if(ban>0){const s=document.createElement("div");s.className="mut";s.textContent="Вход закрыт ещё "+Math.ceil(ban/60000)+" мин";n.append(s)}
+    const b=document.createElement("button");b.className="small";b.textContent="Пробраться";b.disabled=ban>0;b.onclick=()=>startSteal(p);
+    c.append(n,b);box.append(c);
+  });
+}
+setInterval(()=>{if(!$("pool").classList.contains("hide"))renderPool()},10000);
+
+// ---------- хост ----------
+async function startHost(){
+  closePool();await ready;mode="host";target=null;thieves={};show("game");$("title").textContent="Ваш рудник";say("");
+  if(Net.on){try{room=await Net.join(S.id,onHost)}catch(e){room=null}}
+  beat();hb=setInterval(beat,15000);
+  sweep=setInterval(()=>{let ch=false;for(const k in thieves)if(Date.now()-thieves[k].seen>25000){delete thieves[k];ch=true}if(ch)render()},3000);
+  render();
+}
+function beat(){if(Net.on)Net.beat(S.id,{name:S.name,seen:Date.now()})}
+const prog=()=>emit({t:"prog",n:S.progress,drop:!!S.drop});
+function onHost(d){
+  if(!d||!d.id)return;
+  const banned=(S.bans[d.id]||0)>Date.now();
+  if(d.t==="enter"){
+    if(banned){emit({t:"deny",to:d.id});return}
+    const isNew=!thieves[d.id];
+    thieves[d.id]={name:String(d.name||"Вор").slice(0,24),seen:Date.now()};
+    emit({t:"prog",to:d.id,n:S.progress,drop:!!S.drop});
+    if(isNew)render();
+  }else if(!thieves[d.id]||banned){return}
+  else if(d.t==="click"){
+    thieves[d.id].seen=Date.now();
+    if(S.progress<NEED){S.progress++;if(S.progress>=NEED)S.drop=roll()}
+    save();prog();render();
+  }else if(d.t==="pick"){
+    if(!S.drop)return;
+    const o=S.drop;S.drop=null;S.progress=0;save();
+    emit({t:"ore",to:d.id,ore:o});prog();render();
+  }else if(d.t==="leave"){delete thieves[d.id];render()}
+}
+function kick(id){
+  S.bans[id]=Date.now()+BAN;save();emit({t:"kick",to:id});
+  delete thieves[id];say("Вора прогнали! Ему закрыт вход на час.");render();
+}
+
+// ---------- вор ----------
+async function startSteal(p){
+  if((S.bans[p.id]||0)>Date.now())return;
+  closePool();mode="steal";target=p;gotProg=false;vProg=0;vDrop=false;show("game");
+  $("title").textContent="Рудник: "+(p.name||"Игрок");say("Подкрадываемся…");
+  try{room=await Net.join(p.id,onThief)}catch(e){leave("Не удалось подключиться.");return}
+  const enter=()=>emit({t:"enter",id:S.id,name:S.name});
+  enter();hb=setInterval(enter,8000);
+  setTimeout(()=>{if(mode==="steal"&&!gotProg)say("Хост не отвечает — возможно, он ушёл.")},7000);
+  render();
+}
+function onThief(d){
+  if(!d||(d.to&&d.to!==S.id))return;
+  if(d.t==="prog"){gotProg=true;vProg=d.n;vDrop=!!d.drop;if(/^(Подкрад|Хост)/.test($("msg").textContent))say("");render()}
+  else if(d.t==="ore"){
+    S.inv[d.ore]=(S.inv[d.ore]||0)+1;save();say("Украдено: "+d.ore+"!");
+    const f=$("floor");fly(d.ore,(f||$("stage")).getBoundingClientRect());render();
+  }
+  else if(d.t==="kick"){S.bans[target.id]=Date.now()+BAN;save();leave("Вас заметили и прогнали! Вход в этот рудник закрыт на час.")}
+  else if(d.t==="deny")leave("Вам закрыт вход в этот рудник.");
+}
+
+// ---------- общее ----------
+$("bBack").onclick=()=>leave();
+function leave(text){
+  if(mode==="steal")emit({t:"leave",id:S.id});
+  if(mode==="host"&&Net.on)Net.drop(S.id);
+  clearInterval(hb);clearInterval(sweep);
+  if(room){try{room.leave()}catch(e){}room=null}
+  mode="menu";target=null;thieves={};show("menu");closeInv();
+  $("menuMsg").textContent=text||"";
+}
+addEventListener("pagehide",()=>{if(mode==="host"&&Net.on)Net.drop(S.id);if(mode==="steal")emit({t:"leave",id:S.id})});
+
+$("rock").onclick=()=>{
+  regen();
+  const p=mode==="steal"?vProg:S.progress;
+  if(p>=NEED)return;
+  if(S.stamina<=0){say("Нет стамины.");render();return}
+  const r=$("rock");r.classList.remove("hit");void r.offsetWidth;r.classList.add("hit");
+  if(mode==="host"){
+    spend();S.progress++;if(S.progress>=NEED)S.drop=roll();say("");save();prog();
+  }else if(mode==="steal"){
+    spend();save();vProg=Math.min(NEED-1,vProg+1);emit({t:"click",id:S.id});say("");
+  }
+  render();
+};
+function pickDrop(){
+  const el=$("floor");if(!el)return;
+  if(mode==="host"&&S.drop){
+    const o=S.drop,r=el.getBoundingClientRect();
+    S.drop=null;S.progress=0;S.inv[o]=(S.inv[o]||0)+1;save();fly(o,r);prog();render();
+  }else if(mode==="steal"&&vDrop)emit({t:"pick",id:S.id});
+}
+
+// ---------- инвентарь ----------
+$("bInv").onclick=()=>{$("invModal").classList.remove("hide");invKey="";render()};
+function closeInv(){$("invModal").classList.add("hide")}
+$("bInvClose").onclick=closeInv;
+$("invModal").onclick=e=>{if(e.target.id==="invModal")closeInv()};
+let invKey="";
+function renderInv(){
+  const k=JSON.stringify(S.inv);if(k===invKey)return;invKey=k;
+  $("pick").textContent=S.pick;
+  const g=$("grid");g.textContent="";
+  const have=ORES.filter(([n])=>S.inv[n]);
+  for(let i=0;i<SLOTS;i++){
+    const s=document.createElement("div");s.className="slot";
+    if(have[i]){s.classList.add("f");s.append(itemEl(have[i][0],true));const b=document.createElement("b");b.textContent=S.inv[have[i][0]];s.append(b)}
+    g.append(s);
+  }
+}
+
+// ---------- отрисовка ----------
+function render(){
+  regen();
+  const p=mode==="steal"?vProg:S.progress,has=mode==="steal"?vDrop:!!S.drop;
+  const src=p>=NEED?SPR[2]:p>=CRACK?SPR[1]:SPR[0];
+  if($("rockImg").getAttribute("src")!==src)$("rockImg").src=src;
+  $("stamTxt").textContent=S.stamina+" / 100";
+  $("stamBar").style.width=S.stamina+"%";
+  const fr=S.stamina>=100?1:Math.min(1,(Date.now()-S.at)/60000);
+  $("ringF").style.strokeDashoffset=50.27*(1-fr);
+  $("ring").style.opacity=S.stamina>=100?.35:1;
+  let f=$("floor");
+  if(has&&!f){f=itemEl(mode==="steal"?"Руда":S.drop,mode==="host");f.id="floor";f.onclick=pickDrop;$("stage").append(f)}
+  else if(!has&&f)f.remove();
+  const th=$("thieves");th.textContent="";
+  if(mode==="host")for(const id in thieves){
+    const b=document.createElement("button");b.className="thief";b.textContent="🧍 "+thieves[id].name+" — прогнать";b.onclick=()=>kick(id);th.append(b);
+  }
+  if(!$("invModal").classList.contains("hide"))renderInv();
+}
+setInterval(()=>{if(mode!=="menu")render()},1000);
+</script>
+</body>
+</html>
