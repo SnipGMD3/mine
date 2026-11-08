@@ -26,9 +26,9 @@ button{font:inherit;color:inherit;cursor:pointer}
 #ring{vertical-align:middle;margin-left:6px}
 #ring circle{fill:none;stroke-width:3}
 #ringF{stroke:var(--acc);transition:stroke-dashoffset 1s linear;transform:rotate(-90deg);transform-origin:50% 50%}
-#stage{position:relative;height:310px;display:flex;justify-content:center;align-items:flex-end;margin-top:14px}
+#stage{position:relative;display:flex;justify-content:center;align-items:flex-end;gap:6px;margin-top:14px}
 #rock{border:0;background:none;padding:0;-webkit-tap-highlight-color:transparent;touch-action:manipulation}
-#rockImg{height:300px;display:block;user-select:none;-webkit-user-drag:none}
+#rockImg{height:min(300px,52vw);display:block;user-select:none;-webkit-user-drag:none}
 #rock.hit{animation:s .12s}
 @keyframes s{50%{transform:translateX(4px) rotate(1.2deg)}}
 .itm{padding:8px 12px;border-radius:10px;background:var(--card);border:2px solid var(--acc);font-size:14px;text-align:center}
@@ -48,6 +48,22 @@ button{font:inherit;color:inherit;cursor:pointer}
 .slot.f{border:1px solid var(--acc);background:var(--card)}
 .slot .itm{border:0;background:none;padding:2px}
 .slot b{position:absolute;right:4px;bottom:2px;font-size:12px}
+.slotm{width:min(72px,16vw);flex:none;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;gap:4px;padding-bottom:6px}
+.mnr{width:100%;display:flex;flex-direction:column;align-items:center}
+.mnr svg{width:100%;display:block;overflow:visible}
+.mnr.flip svg{transform:scaleX(-1)}
+.mnr.k{cursor:pointer}
+.mlab{font-size:11px;font-weight:700;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.arm{transform-origin:40px 40px}
+.swing .arm{animation:sw .28s ease-out}
+@keyframes sw{0%{transform:rotate(-25deg)}40%{transform:rotate(72deg)}100%{transform:rotate(0)}}
+#nickIn{width:100%;box-sizing:border-box;padding:12px;border-radius:10px;border:1px solid var(--line);background:var(--card);color:var(--fg);font:inherit;font-size:18px}
+#swatches{display:grid;grid-template-columns:repeat(6,1fr);gap:10px;margin:12px 0}
+.sw{width:100%;aspect-ratio:1;border-radius:50%;border:3px solid transparent;cursor:pointer;padding:0}
+.sw.on{border-color:var(--fg)}
+.mrow{display:flex;align-items:center;gap:12px}
+.av{width:42px;height:42px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;flex:none}
+.nm{font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 </style>
 </head>
 <body>
@@ -57,11 +73,23 @@ button{font:inherit;color:inherit;cursor:pointer}
     <button class="btn main" id="bPlay">Играть</button>
     <button class="btn" id="bSneak">Пробраться</button>
     <div id="menuMsg" class="mut" style="text-align:center"></div>
-    <div id="pool" class="hide">
-      <div class="row"><b>Активные рудники</b><button class="small" id="bClose">Закрыть</button></div>
-      <div class="row card"><input id="codeIn" maxlength="6" placeholder="Код рудника" autocomplete="off"><button class="small" id="bCode">Войти по коду</button></div>
-      <div id="poolList"></div>
-    </div>
+  </div>
+
+  <div id="acc" class="hide">
+    <button class="small" id="bAccBack">← Меню</button>
+    <h1 style="margin:24px 0">Новый шахтёр</h1>
+    <input id="nickIn" maxlength="14" placeholder="Ваш ник" autocomplete="off">
+    <div class="mut" style="margin-top:16px">Цвет ника</div>
+    <div id="swatches"></div>
+    <div class="card" style="text-align:center">Так вас увидят другие: <b id="prev">Ник</b></div>
+    <div id="accErr" style="color:var(--acc);min-height:22px;text-align:center"></div>
+    <button class="btn main" id="bAccOk">Создать</button>
+  </div>
+
+  <div id="sneak" class="hide">
+    <div class="row"><button class="small" id="bSneakBack">← Меню</button><b>Активные рудники</b><span style="width:76px"></span></div>
+    <div class="mut" style="margin:12px 0 4px;text-align:center">Выберите рудник и проберитесь внутрь. Список обновляется сам.</div>
+    <div id="poolList"></div>
   </div>
 
   <div id="game" class="hide">
@@ -70,9 +98,8 @@ button{font:inherit;color:inherit;cursor:pointer}
       <svg id="ring" width="22" height="22" viewBox="0 0 22 22"><circle cx="11" cy="11" r="8" stroke="var(--bar)"/><circle id="ringF" cx="11" cy="11" r="8" stroke-dasharray="50.27" stroke-dashoffset="50.27"/></svg>
     </div>
     <div class="bar"><i id="stamBar"></i></div>
-    <div id="stage"><button id="rock" aria-label="Рудник"><img id="rockImg" alt="" draggable="false"></button></div>
-    <div id="thieves"></div>
-    <div id="msg"></div>
+    <div id="stage"><div class="slotm" id="slotL"></div><button id="rock" aria-label="Рудник"><img id="rockImg" alt="" draggable="false"></button><div class="slotm" id="slotR"></div></div>
+    <div id="msg" style="margin-top:10px"></div>
   </div>
 </div>
 
@@ -90,6 +117,10 @@ const ORES=[["Grath",50],["Grathen",30],["Korath",15],["Korashen",4],["Velgrun",
 const KEY="mine_save_v1",NEED=50,CRACK=25,BAN=3600000,SLOTS=20;
 const SPR=["assets/rock_full.png","assets/rock_cracked.png","assets/rock_broken.png"];
 const $=id=>document.getElementById(id);
+const COLORS=["#e5484d","#f76b15","#f5a524","#d4b200","#7bbf2a","#2fa84f","#14b8a6","#1e9bd7","#3e63dd","#7c5cd6","#c2409d","#8d8d8d"];
+const PICKS={wood:{name:"Деревянная кирка",head:"#a9773c"}}; // сюда добавляются новые кирки
+const safeColor=c=>/^#[0-9a-f]{6}$/i.test(c)?c:"#8d8d8d";
+const pickOf=id=>PICKS[id]?id:"wood";
 SPR.forEach(s=>{new Image().src=s});
 
 // ---------- сохранение (локально в браузере) ----------
@@ -108,8 +139,9 @@ function genChances(){
 }
 let S=null;try{S=JSON.parse(localStorage.getItem(KEY))}catch(e){}
 if(!S)S={id:Math.random().toString(36).slice(2,10)+Date.now().toString(36),name:"Шахтёр-"+(1000+Math.floor(Math.random()*9000)),
-  stamina:100,at:Date.now(),progress:0,drop:null,chances:genChances(),inv:{},bans:{},pick:"Деревянная кирка"};
+  stamina:100,at:Date.now(),progress:0,drop:null,chances:genChances(),inv:{},bans:{},pickId:"wood",color:"#e5484d",created:false};
 if(S.drop===undefined)S.drop=null;
+if(!S.pickId)S.pickId="wood";if(!S.color)S.color="#e5484d";
 if(!S.code){const A="ABCDEFGHJKLMNPQRSTUVWXYZ23456789";S.code="";for(let i=0;i<6;i++)S.code+=A[Math.floor(Math.random()*A.length)]}
 function save(){try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}}
 save();
@@ -152,18 +184,18 @@ const Lob={peer:null,conn:null,isB:false,items:{},reg:null,cb:null,rx:0,on:false
   send(d){if(this.isB)this.serve(null,d);else if(this.conn&&this.conn.open)this.conn.send(d)},
   serve(c,d){
     if(!d)return;
-    if(d.t==="reg")this.items[d.code]={name:String(d.name||"").slice(0,24),seen:Date.now()};
+    if(d.t==="reg")this.items[d.code]={name:String(d.name||"").slice(0,16),color:safeColor(d.color),seen:Date.now()};
     else if(d.t==="unreg")delete this.items[d.code];
     else if(d.t==="list"){
       const now=Date.now(),l=[];
-      for(const k in this.items){if(now-this.items[k].seen<45000)l.push({id:k,name:this.items[k].name});else delete this.items[k]}
+      for(const k in this.items){if(now-this.items[k].seen<45000)l.push({id:k,name:this.items[k].name,color:this.items[k].color});else delete this.items[k]}
       if(c)c.send({t:"list",items:l});else this.got({t:"list",items:l});
     }
   },
   got(d){if(d&&d.t==="list"){this.rx=Date.now();if(this.cb)this.cb(d.items.map(x=>Object.assign({seen:Date.now()},x)))}},
   tick(){
     if(!this.peer)return;
-    if(this.reg)this.send({t:"reg",code:this.reg.code,name:this.reg.name});
+    if(this.reg)this.send({t:"reg",code:this.reg.code,name:this.reg.name,color:this.reg.color});
     if(this.cb||this.reg)this.send({t:"list"});
     if(!this.isB&&(this.cb||this.reg)&&Date.now()-this.rx>15000){this.rx=Date.now();try{this.conn.close()}catch(e){}}
   }
@@ -176,7 +208,7 @@ const Net={on:false,kind:"",
   },
   beat(code,d){
     if(this.kind==="c")this.db.doc("sessions/"+code).set(d).catch(()=>{});
-    else{Lob.reg={code,name:d.name};Lob.start();Lob.tick()}
+    else{Lob.reg={code,name:d.name,color:d.color};Lob.start();Lob.tick()}
   },
   drop(code){
     if(this.kind==="c")this.db.doc("sessions/"+code).delete().catch(()=>{});
@@ -226,7 +258,7 @@ const ready=Net.init();
 
 let room=null,mode="menu",target=null,thieves={},hb=null,sweep=null,unsubPool=null,pool=[],gotProg=false,vProg=0,vDrop=false;
 const emit=d=>{try{room&&room.emit(d)}catch(e){}};
-function show(id){["menu","game"].forEach(x=>$(x).classList.toggle("hide",x!==id))}
+function show(id){["menu","acc","sneak","game"].forEach(x=>$(x).classList.toggle("hide",x!==id))}
 function say(t){$("msg").textContent=t||""}
 
 // ---------- предметы, полёт в инвентарь ----------
@@ -244,65 +276,111 @@ function fly(name,r){
   setTimeout(()=>{e.remove();const b=$("bInv");b.classList.add("pop");setTimeout(()=>b.classList.remove("pop"),300)},680);
 }
 
-// ---------- меню ----------
-$("bPlay").onclick=()=>startHost();
-$("bSneak").onclick=async()=>{
-  await ready;$("menuMsg").textContent="";$("pool").classList.remove("hide");
+// ---------- шахтёры ----------
+function minerEl(m){
+  const d=document.createElement("div");d.className="mnr"+(m.flip?" flip":"")+(m.click?" k":"");
+  const head=PICKS[pickOf(m.pick)].head;
+  d.innerHTML='<svg viewBox="0 0 76 96"><rect x="21" y="62" width="8" height="28" rx="3" fill="#3b3a46"/><rect x="34" y="62" width="8" height="28" rx="3" fill="#3b3a46"/><rect x="17" y="32" width="28" height="34" rx="8" fill="'+safeColor(m.color)+'"/><circle cx="31" cy="22" r="11" fill="#f1c9a0"/><path d="M19 21a12 12 0 0 1 24 0z" fill="#f5c542"/><rect x="18" y="19" width="26" height="4" rx="2" fill="#e0a800"/><g class="arm"><rect x="38" y="36" width="18" height="7" rx="3" fill="#f1c9a0"/><rect x="53" y="6" width="4" height="46" rx="2" fill="#7a5230"/><path d="M40 12Q55 -2 70 12L67 16Q55 6 43 16Z" fill="'+head+'"/></g></svg>';
+  const l=document.createElement("div");l.className="mlab";l.textContent=m.name;l.style.color=safeColor(m.color);
+  d.append(l);if(m.click)d.onclick=m.click;
+  return d;
+}
+const mEls={};
+function syncMiner(slot,key,info){
+  const cur=mEls[key];
+  if(!info){if(cur){cur.el.remove();delete mEls[key]}return}
+  const sig=[info.name,info.color,info.pick].join("|");
+  if(cur&&cur.sig===sig)return;
+  const el=minerEl(info);
+  if(cur)cur.el.replaceWith(el);else slot.append(el);
+  mEls[key]={el,sig};
+}
+function clearMiners(){for(const k in mEls){mEls[k].el.remove();delete mEls[k]}}
+function swing(key){const c=mEls[key];if(!c)return;c.el.classList.remove("swing");void c.el.offsetWidth;c.el.classList.add("swing")}
+function hitRock(){const r=$("rock");r.classList.remove("hit");void r.offsetWidth;r.classList.add("hit")}
+function setTitle(pre,name,color){const t=$("title");t.textContent=pre;if(name){const s=document.createElement("span");s.textContent=name;s.style.color=safeColor(color);t.append(" ",s)}}
+
+// ---------- аккаунт ----------
+let accCb=null,accColor=COLORS[0];
+COLORS.forEach(c=>{const b=document.createElement("button");b.className="sw";b.style.background=c;b.dataset.c=c;b.onclick=()=>{accColor=c;accUp()};$("swatches").append(b)});
+function accUp(){
+  document.querySelectorAll(".sw").forEach(b=>b.classList.toggle("on",b.dataset.c===accColor));
+  const p=$("prev");p.textContent=$("nickIn").value.trim()||"Ник";p.style.color=accColor;
+}
+$("nickIn").oninput=accUp;
+function needAcc(cb){
+  if(S.created)return false;
+  accCb=cb;$("nickIn").value="";accColor=COLORS[0];$("accErr").textContent="";accUp();show("acc");return true;
+}
+$("bAccOk").onclick=()=>{
+  const n=$("nickIn").value.trim();
+  if(n.length<2){$("accErr").textContent="Ник должен быть от 2 до 14 символов.";return}
+  S.name=n;S.color=accColor;S.created=true;save();
+  const cb=accCb;accCb=null;if(cb)cb();
+};
+$("bAccBack").onclick=()=>show("menu");
+
+// ---------- меню и список рудников ----------
+$("bPlay").onclick=()=>{if(!needAcc(startHost))startHost()};
+$("bSneak").onclick=()=>{if(!needAcc(openSneak))openSneak()};
+$("bSneakBack").onclick=closeSneak;
+async function openSneak(){
+  await ready;$("menuMsg").textContent="";show("sneak");pool=[];$("poolList").textContent="";
   if(!Net.on){$("poolList").textContent="Онлайн не настроен.";return}
   if(unsubPool)unsubPool();
-  try{unsubPool=Net.lobby(l=>{pool=l;renderPool()},()=>{$("poolList").textContent="Не удалось загрузить список."})}catch(e){$("poolList").textContent="Не удалось загрузить список."}
-};
-$("bClose").onclick=closePool;
-$("bCode").onclick=()=>{
-  const c=$("codeIn").value.trim().toUpperCase();
-  if(c.length!==6||c===S.code)return;
-  if((S.bans[c]||0)>Date.now()){closePool();$("menuMsg").textContent="Вход в этот рудник закрыт на час.";return}
-  startSteal({id:c,name:"Рудник "+c});
-};
-function closePool(){$("pool").classList.add("hide");if(unsubPool){unsubPool();unsubPool=null}}
+  const bad=()=>{$("poolList").textContent="Не удалось загрузить список."};
+  renderPool();
+  try{unsubPool=Net.lobby(l=>{pool=l;renderPool()},bad)}catch(e){bad()}
+}
+function closeSneak(){if(unsubPool){unsubPool();unsubPool=null}show("menu")}
 function renderPool(){
   const box=$("poolList");box.textContent="";
   const live=pool.filter(p=>p.id!==S.code&&Date.now()-(p.seen||0)<45000);
-  if(!live.length){const d=document.createElement("div");d.className="mut card";d.textContent="Сейчас нет активных рудников.";box.append(d);return}
+  if(!live.length){const d=document.createElement("div");d.className="card mut";d.style.textAlign="center";d.textContent="Сейчас никто не копает. Загляните позже.";box.append(d);return}
   live.forEach(p=>{
-    const ban=(S.bans[p.id]||0)-Date.now();
-    const c=document.createElement("div");c.className="card row";
-    const n=document.createElement("div");n.textContent=p.name||"Игрок";
-    if(ban>0){const s=document.createElement("div");s.className="mut";s.textContent="Вход закрыт ещё "+Math.ceil(ban/60000)+" мин";n.append(s)}
+    const ban=(S.bans[p.id]||0)-Date.now(),col=safeColor(p.color),nm=String(p.name||"Игрок").slice(0,16);
+    const c=document.createElement("div");c.className="card mrow";
+    const av=document.createElement("div");av.className="av";av.style.background=col;av.textContent=nm[0].toUpperCase();
+    const mid=document.createElement("div");mid.style.cssText="flex:1;min-width:0";
+    const n=document.createElement("div");n.className="nm";n.style.color=col;n.textContent=nm;
+    const st=document.createElement("div");st.className="mut";st.textContent=ban>0?"Вход закрыт ещё "+Math.ceil(ban/60000)+" мин":"Добывает руду";
+    mid.append(n,st);
     const b=document.createElement("button");b.className="small";b.textContent="Пробраться";b.disabled=ban>0;b.onclick=()=>startSteal(p);
-    c.append(n,b);box.append(c);
+    c.append(av,mid,b);box.append(c);
   });
 }
-setInterval(()=>{if(!$("pool").classList.contains("hide"))renderPool()},10000);
+setInterval(()=>{if(!$("sneak").classList.contains("hide"))renderPool()},10000);
 
 // ---------- хост ----------
 async function startHost(){
-  closePool();await ready;mode="host";target=null;thieves={};show("game");$("title").textContent="Рудник · код "+S.code;say("");
+  await ready;mode="host";target=null;thieves={};clearMiners();show("game");setTitle("Ваш рудник");say("");
   if(Net.on){try{room=await Net.join(S.code,onHost,true)}catch(e){room=null;say("Без сети: "+((e&&e.message)||"онлайн недоступен"))}}
+  if(mode!=="host"){try{room&&room.leave()}catch(e){}room=null;return}
   beat();hb=setInterval(beat,15000);
   sweep=setInterval(()=>{let ch=false;for(const k in thieves)if(Date.now()-thieves[k].seen>25000){delete thieves[k];ch=true}if(ch)render()},3000);
   render();
 }
-function beat(){if(Net.on)Net.beat(S.code,{name:S.name,seen:Date.now()})}
-const prog=()=>emit({t:"prog",n:S.progress,drop:!!S.drop});
+function beat(){if(Net.on)Net.beat(S.code,{name:S.name,color:S.color,seen:Date.now()})}
+const progMsg=hit=>({t:"prog",n:S.progress,drop:!!S.drop,hit:hit?1:0,nm:S.name,cl:S.color,pk:S.pickId});
+const prog=hit=>emit(progMsg(hit));
 function onHost(d){
   if(!d||!d.id)return;
   const banned=(S.bans[d.id]||0)>Date.now();
   if(d.t==="enter"){
     if(banned){emit({t:"deny",to:d.id});return}
     const isNew=!thieves[d.id];
-    thieves[d.id]={name:String(d.name||"Вор").slice(0,24),seen:Date.now()};
-    emit({t:"prog",to:d.id,n:S.progress,drop:!!S.drop});
-    if(isNew)render();
+    thieves[d.id]={name:String(d.name||"Вор").slice(0,16),color:safeColor(d.cl),pick:pickOf(d.pk),seen:Date.now()};
+    emit(Object.assign(progMsg(0),{to:d.id}));
+    if(isNew){say("Кто-то пробрался! Нажмите на шахтёра, чтобы прогнать.");render()}
   }else if(!thieves[d.id]||banned){return}
   else if(d.t==="click"){
     thieves[d.id].seen=Date.now();
-    if(S.progress<NEED){S.progress++;if(S.progress>=NEED)S.drop=roll()}
-    save();prog();render();
+    if(S.progress<NEED){S.progress++;if(S.progress>=NEED)S.drop=roll();hitRock();swing("t"+d.id)}
+    save();prog(0);render();
   }else if(d.t==="pick"){
     if(!S.drop)return;
     const o=S.drop;S.drop=null;S.progress=0;save();
-    emit({t:"ore",to:d.id,ore:o});prog();render();
+    emit({t:"ore",to:d.id,ore:o});prog(0);render();
   }else if(d.t==="leave"){delete thieves[d.id];render()}
 }
 function kick(id){
@@ -311,12 +389,16 @@ function kick(id){
 }
 
 // ---------- вор ----------
+let owner=null;
 async function startSteal(p){
   if((S.bans[p.id]||0)>Date.now())return;
-  closePool();await ready;if(!Net.on){$("menuMsg").textContent="Онлайн не настроен.";return}mode="steal";target=p;gotProg=false;vProg=0;vDrop=false;show("game");
-  $("title").textContent="Рудник: "+(p.name||"Игрок");say("Подкрадываемся…");
+  await ready;if(!Net.on)return;
+  mode="steal";target=p;gotProg=false;vProg=0;vDrop=false;owner=null;clearMiners();show("game");
+  if(unsubPool){unsubPool();unsubPool=null}
+  setTitle("Рудник:",p.name||"Игрок",p.color);say("Подкрадываемся…");
   try{room=await Net.join(p.id,onThief,false)}catch(e){leave((e&&e.message)||"Не удалось подключиться.");return}
-  const enter=()=>emit({t:"enter",id:S.id,name:S.name});
+  if(mode!=="steal"){try{room&&room.leave()}catch(e){}room=null;return}
+  const enter=()=>emit({t:"enter",id:S.id,name:S.name,cl:S.color,pk:S.pickId});
   enter();hb=setInterval(enter,8000);
   setTimeout(()=>{if(mode==="steal"&&!gotProg)say("Хост не отвечает — возможно, он ушёл.")},7000);
   render();
@@ -324,7 +406,13 @@ async function startSteal(p){
 function onThief(d){
   if(mode!=="steal"||!d||(d.to&&d.to!==S.id))return;
   if(d.t==="gone"){leave("Хост ушёл.");return}
-  if(d.t==="prog"){gotProg=true;vProg=d.n;vDrop=!!d.drop;if(/^(Подкрад|Хост)/.test($("msg").textContent))say("");render()}
+  if(d.t==="prog"){
+    gotProg=true;vProg=d.n;vDrop=!!d.drop;
+    if(d.nm)owner={name:String(d.nm).slice(0,16),color:safeColor(d.cl),pick:pickOf(d.pk)};
+    if(/^(Подкрад|Хост)/.test($("msg").textContent))say("");
+    render();
+    if(d.hit){hitRock();swing("own")}
+  }
   else if(d.t==="ore"){
     S.inv[d.ore]=(S.inv[d.ore]||0)+1;save();say("Украдено: "+d.ore+"!");
     const f=$("floor");fly(d.ore,(f||$("stage")).getBoundingClientRect());render();
@@ -340,7 +428,7 @@ function leave(text){
   if(mode==="host"&&Net.on)Net.drop(S.code);
   clearInterval(hb);clearInterval(sweep);
   if(room){try{room.leave()}catch(e){}room=null}
-  mode="menu";target=null;thieves={};show("menu");closeInv();
+  mode="menu";target=null;thieves={};clearMiners();show("menu");closeInv();
   $("menuMsg").textContent=text||"";
 }
 addEventListener("pagehide",()=>{if(mode==="host"&&Net.on)Net.drop(S.code);if(mode==="steal")emit({t:"leave",id:S.id})});
@@ -350,11 +438,11 @@ $("rock").onclick=()=>{
   const p=mode==="steal"?vProg:S.progress;
   if(p>=NEED)return;
   if(S.stamina<=0){say("Нет стамины.");render();return}
-  const r=$("rock");r.classList.remove("hit");void r.offsetWidth;r.classList.add("hit");
+  hitRock();
   if(mode==="host"){
-    spend();S.progress++;if(S.progress>=NEED)S.drop=roll();say("");save();prog();
+    spend();S.progress++;if(S.progress>=NEED)S.drop=roll();swing("own");say("");save();prog(1);
   }else if(mode==="steal"){
-    spend();save();vProg=Math.min(NEED-1,vProg+1);emit({t:"click",id:S.id});say("");
+    spend();save();vProg=Math.min(NEED-1,vProg+1);swing("me");emit({t:"click",id:S.id});say("");
   }
   render();
 };
@@ -362,7 +450,7 @@ function pickDrop(){
   const el=$("floor");if(!el)return;
   if(mode==="host"&&S.drop){
     const o=S.drop,r=el.getBoundingClientRect();
-    S.drop=null;S.progress=0;S.inv[o]=(S.inv[o]||0)+1;save();fly(o,r);prog();render();
+    S.drop=null;S.progress=0;S.inv[o]=(S.inv[o]||0)+1;save();fly(o,r);prog(0);render();
   }else if(mode==="steal"&&vDrop)emit({t:"pick",id:S.id});
 }
 
@@ -374,13 +462,13 @@ $("invModal").onclick=e=>{if(e.target.id==="invModal")closeInv()};
 let invKey="";
 function renderInv(){
   const k=JSON.stringify(S.inv);if(k===invKey)return;invKey=k;
-  $("pick").textContent=S.pick;
+  $("pick").textContent=PICKS[pickOf(S.pickId)].name;
   const g=$("grid");g.textContent="";
   const have=ORES.filter(([n])=>S.inv[n]);
   for(let i=0;i<SLOTS;i++){
-    const s=document.createElement("div");s.className="slot";
-    if(have[i]){s.classList.add("f");s.append(itemEl(have[i][0],true));const b=document.createElement("b");b.textContent=S.inv[have[i][0]];s.append(b)}
-    g.append(s);
+    const sl=document.createElement("div");sl.className="slot";
+    if(have[i]){sl.classList.add("f");sl.append(itemEl(have[i][0],true));const b=document.createElement("b");b.textContent=S.inv[have[i][0]];sl.append(b)}
+    g.append(sl);
   }
 }
 
@@ -398,13 +486,18 @@ function render(){
   let f=$("floor");
   if(has&&!f){f=itemEl(mode==="steal"?"Руда":S.drop,mode==="host");f.id="floor";f.onclick=pickDrop;$("stage").append(f)}
   else if(!has&&f)f.remove();
-  const th=$("thieves");th.textContent="";
-  if(mode==="host")for(const id in thieves){
-    const b=document.createElement("button");b.className="thief";b.textContent="🧍 "+thieves[id].name+" — прогнать";b.onclick=()=>kick(id);th.append(b);
+  const L=$("slotL"),R=$("slotR");
+  if(mode==="host"){
+    syncMiner(L,"own",{name:S.name,color:S.color,pick:S.pickId});
+    for(const id in thieves){const t=thieves[id];syncMiner(R,"t"+id,{name:t.name,color:t.color,pick:t.pick,flip:true,click:()=>kick(id)})}
+    for(const k of Object.keys(mEls))if(k[0]==="t"&&!thieves[k.slice(1)])syncMiner(R,k,null);
+  }else if(mode==="steal"){
+    syncMiner(L,"own",owner);
+    syncMiner(R,"me",{name:S.name,color:S.color,pick:S.pickId,flip:true});
   }
   if(!$("invModal").classList.contains("hide"))renderInv();
 }
-setInterval(()=>{if(mode!=="menu")render()},1000);
+setInterval(()=>{if(mode==="host"||mode==="steal")render()},1000);
 </script>
 </body>
 </html>
