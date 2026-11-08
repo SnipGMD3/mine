@@ -22,6 +22,7 @@ button{font:inherit;color:inherit;cursor:pointer}
 .bar i{display:block;height:100%;background:var(--acc);width:0}
 .small{padding:8px 14px;border-radius:8px;border:1px solid var(--line);background:var(--card)}
 .hide{display:none!important}
+#codeIn{flex:1;min-width:0;padding:8px 10px;border-radius:8px;border:1px solid var(--line);background:var(--card);color:var(--fg);text-transform:uppercase;font:inherit}
 #ring{vertical-align:middle;margin-left:6px}
 #ring circle{fill:none;stroke-width:3}
 #ringF{stroke:var(--acc);transition:stroke-dashoffset 1s linear;transform:rotate(-90deg);transform-origin:50% 50%}
@@ -58,6 +59,7 @@ button{font:inherit;color:inherit;cursor:pointer}
     <div id="menuMsg" class="mut" style="text-align:center"></div>
     <div id="pool" class="hide">
       <div class="row"><b>Активные рудники</b><button class="small" id="bClose">Закрыть</button></div>
+      <div class="row card"><input id="codeIn" maxlength="6" placeholder="Код рудника" autocomplete="off"><button class="small" id="bCode">Войти по коду</button></div>
       <div id="poolList"></div>
     </div>
   </div>
@@ -82,12 +84,11 @@ button{font:inherit;color:inherit;cursor:pointer}
   </div>
 </div>
 
+<script src="https://cdn.jsdelivr.net/npm/peerjs@1.5.4/dist/peerjs.min.js"></script>
 <script>
 const ORES=[["Grath",50],["Grathen",30],["Korath",15],["Korashen",4],["Velgrun",.8],["Velgrath",.2]];
 const KEY="mine_save_v1",NEED=50,CRACK=25,BAN=3600000,SLOTS=20;
 const SPR=["assets/rock_full.png","assets/rock_cracked.png","assets/rock_broken.png"];
-// Онлайн для GitHub Pages: адрес Firebase Realtime Database, например "https://my-game-default-rtdb.europe-west1.firebasedatabase.app"
-const FIREBASE_URL="";
 const $=id=>document.getElementById(id);
 SPR.forEach(s=>{new Image().src=s});
 
@@ -109,6 +110,7 @@ let S=null;try{S=JSON.parse(localStorage.getItem(KEY))}catch(e){}
 if(!S)S={id:Math.random().toString(36).slice(2,10)+Date.now().toString(36),name:"Шахтёр-"+(1000+Math.floor(Math.random()*9000)),
   stamina:100,at:Date.now(),progress:0,drop:null,chances:genChances(),inv:{},bans:{},pick:"Деревянная кирка"};
 if(S.drop===undefined)S.drop=null;
+if(!S.code){const A="ABCDEFGHJKLMNPQRSTUVWXYZ23456789";S.code="";for(let i=0;i<6;i++)S.code+=A[Math.floor(Math.random()*A.length)]}
 function save(){try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}}
 save();
 function roll(){let r=Math.random()*10000,c=0;for(let i=0;i<ORES.length;i++){c+=S.chances[i];if(r<c)return ORES[i][0]}return ORES[0][0]}
@@ -120,52 +122,94 @@ function regen(){
 function spend(){if(S.stamina>=100)S.at=Date.now();S.stamina--}
 
 // ---------- сеть (подключаемый слой) ----------
-// "c" — предпросмотр в Claude; "f" — Firebase Realtime Database (REST), работает со статичного хостинга GitHub Pages.
+// "p" — PeerJS (WebRTC, прямые соединения между браузерами; работает на GitHub Pages без своего сервера).
+// "c" — предпросмотр внутри Claude (там внешние серверы закрыты).
+// Список сессий: игрок, занявший адрес "mineg-lobby", становится «справочным бюро»; остальные регистрируются у него.
+const LB="mineg-lobby";
+const Lob={peer:null,conn:null,isB:false,items:{},reg:null,cb:null,rx:0,on:false,
+  start(){if(this.on)return;this.on=true;setInterval(()=>this.tick(),5000);this.become()},
+  become(){
+    const p=new Peer(LB);
+    p.on("open",()=>{this.peer=p;this.isB=true;this.conn=null;this.items={};p.on("connection",c=>c.on("data",d=>this.serve(c,d)));this.up()});
+    p.on("error",e=>{
+      try{p.destroy()}catch(x){}
+      if(this.peer===p){this.peer=null;this.isB=false}
+      if(e.type==="unavailable-id")this.joinB();else setTimeout(()=>this.become(),3000+Math.random()*2000);
+    });
+  },
+  joinB(){
+    const p=new Peer();
+    const retry=()=>{try{p.destroy()}catch(x){}if(this.peer===p){this.peer=null;this.conn=null}setTimeout(()=>this.become(),500+Math.random()*1500)};
+    p.on("error",retry);
+    p.on("open",()=>{
+      const c=p.connect(LB,{reliable:true});
+      c.on("open",()=>{this.peer=p;this.conn=c;this.isB=false;this.up()});
+      c.on("data",d=>this.got(d));c.on("close",retry);
+    });
+  },
+  up(){this.rx=Date.now();this.tick()},
+  send(d){if(this.isB)this.serve(null,d);else if(this.conn&&this.conn.open)this.conn.send(d)},
+  serve(c,d){
+    if(!d)return;
+    if(d.t==="reg")this.items[d.code]={name:String(d.name||"").slice(0,24),seen:Date.now()};
+    else if(d.t==="unreg")delete this.items[d.code];
+    else if(d.t==="list"){
+      const now=Date.now(),l=[];
+      for(const k in this.items){if(now-this.items[k].seen<45000)l.push({id:k,name:this.items[k].name});else delete this.items[k]}
+      if(c)c.send({t:"list",items:l});else this.got({t:"list",items:l});
+    }
+  },
+  got(d){if(d&&d.t==="list"){this.rx=Date.now();if(this.cb)this.cb(d.items.map(x=>Object.assign({seen:Date.now()},x)))}},
+  tick(){
+    if(!this.peer)return;
+    if(this.reg)this.send({t:"reg",code:this.reg.code,name:this.reg.name});
+    if(this.cb||this.reg)this.send({t:"list"});
+    if(!this.isB&&(this.cb||this.reg)&&Date.now()-this.rx>15000){this.rx=Date.now();try{this.conn.close()}catch(e){}}
+  }
+};
 const Net={on:false,kind:"",
   async init(){
     if(window.claude){try{this.db=await claude.use("db");this.rt=await claude.use("room");if(this.db&&this.rt){this.on=true;this.kind="c"}}catch(e){}}
-    else if(FIREBASE_URL){this.on=true;this.kind="f"}
+    else if(typeof Peer!=="undefined"){this.on=true;this.kind="p"}
     return this.on;
   },
-  beat(id,d){
-    if(this.kind==="c")this.db.doc("sessions/"+id).set(d).catch(()=>{});
-    else if(this.kind==="f")fetch(FIREBASE_URL+"/sessions/"+id+".json",{method:"PUT",body:JSON.stringify(d)}).catch(()=>{});
+  beat(code,d){
+    if(this.kind==="c")this.db.doc("sessions/"+code).set(d).catch(()=>{});
+    else{Lob.reg={code,name:d.name};Lob.start();Lob.tick()}
   },
-  drop(id){
-    if(this.kind==="c")this.db.doc("sessions/"+id).delete().catch(()=>{});
-    else if(this.kind==="f")fetch(FIREBASE_URL+"/sessions/"+id+".json",{method:"DELETE",keepalive:true}).catch(()=>{});
+  drop(code){
+    if(this.kind==="c")this.db.doc("sessions/"+code).delete().catch(()=>{});
+    else{Lob.send({t:"unreg",code});Lob.reg=null}
   },
   lobby(cb,err){
-    if(this.kind==="c"){
-      return this.db.collection("sessions").onSnapshot(s=>cb(s.docs.map(d=>Object.assign({id:d.id},d.data()))),err);
-    }
-    let map={};const es=new EventSource(FIREBASE_URL+"/sessions.json");
-    const push=()=>cb(Object.entries(map).map(([id,v])=>Object.assign({id},v)));
-    es.addEventListener("put",e=>{const{path,data}=JSON.parse(e.data);if(path==="/")map=data||{};else if(data===null)delete map[path.slice(1)];else map[path.slice(1)]=data;push()});
-    es.addEventListener("patch",e=>{const{path,data}=JSON.parse(e.data);if(path==="/"){Object.assign(map,data);push()}});
-    es.onerror=()=>{if(es.readyState===2&&err)err()};
-    return()=>es.close();
+    if(this.kind==="c")return this.db.collection("sessions").onSnapshot(s=>cb(s.docs.map(d=>Object.assign({id:d.id},d.data()))),err);
+    Lob.cb=cb;Lob.start();Lob.tick();
+    return()=>{Lob.cb=null};
   },
-  async join(rid,handler){
+  async join(code,handler,host){
     if(this.kind==="c"){
-      const room=await this.rt.join("mine-"+rid);
+      const room=await this.rt.join("mine-"+code);
       const un=room.on("g",m=>{if(!m.isMe)handler(m.data)});
       return{emit:d=>room.emit("g",d),leave(){try{un()}catch(e){}try{room.leave()}catch(e){}}};
     }
-    const base=FIREBASE_URL+"/rooms/"+rid+"/m";
-    const es=new EventSource(base+".json");let first=true;const seen=new Set();
-    es.addEventListener("put",e=>{
-      const{path,data}=JSON.parse(e.data);
-      if(first){first=false;if(data&&path==="/")Object.keys(data).forEach(k=>seen.add(k));return}
-      const k=path.slice(1);
-      if(path==="/"||k.includes("/")||seen.has(k)||!data)return;
-      seen.add(k);handler(data);
+    return new Promise((res,rej)=>{
+      setTimeout(()=>rej(new Error("timeout")),12000);
+      if(host){
+        const conns={},p=new Peer("mineg-"+code);
+        const emit=d=>{(d.to?[conns[d.to]]:Object.values(conns)).forEach(c=>c&&c.open&&c.send(d))};
+        p.on("error",rej);
+        p.on("open",()=>res({emit,leave(){p.destroy()}}));
+        p.on("connection",c=>c.on("data",d=>{if(d&&d.id)conns[d.id]=c;handler(d)}));
+      }else{
+        const p=new Peer();
+        p.on("error",rej);
+        p.on("open",()=>{
+          const c=p.connect("mineg-"+code,{reliable:true});
+          c.on("open",()=>res({emit:d=>c.open&&c.send(d),leave(){p.destroy()}}));
+          c.on("data",handler);c.on("close",()=>handler({t:"gone"}));
+        });
+      }
     });
-    return{
-      emit:d=>fetch(base+".json",{method:"POST",body:JSON.stringify(d)}).then(r=>r.json())
-        .then(j=>setTimeout(()=>fetch(base+"/"+j.name+".json",{method:"DELETE"}).catch(()=>{}),15000)).catch(()=>{}),
-      leave(){es.close()}
-    };
   }
 };
 const ready=Net.init();
@@ -199,10 +243,16 @@ $("bSneak").onclick=async()=>{
   try{unsubPool=Net.lobby(l=>{pool=l;renderPool()},()=>{$("poolList").textContent="Не удалось загрузить список."})}catch(e){$("poolList").textContent="Не удалось загрузить список."}
 };
 $("bClose").onclick=closePool;
+$("bCode").onclick=()=>{
+  const c=$("codeIn").value.trim().toUpperCase();
+  if(c.length!==6||c===S.code)return;
+  if((S.bans[c]||0)>Date.now()){closePool();$("menuMsg").textContent="Вход в этот рудник закрыт на час.";return}
+  startSteal({id:c,name:"Рудник "+c});
+};
 function closePool(){$("pool").classList.add("hide");if(unsubPool){unsubPool();unsubPool=null}}
 function renderPool(){
   const box=$("poolList");box.textContent="";
-  const live=pool.filter(p=>p.id!==S.id&&Date.now()-(p.seen||0)<45000);
+  const live=pool.filter(p=>p.id!==S.code&&Date.now()-(p.seen||0)<45000);
   if(!live.length){const d=document.createElement("div");d.className="mut card";d.textContent="Сейчас нет активных рудников.";box.append(d);return}
   live.forEach(p=>{
     const ban=(S.bans[p.id]||0)-Date.now();
@@ -217,13 +267,13 @@ setInterval(()=>{if(!$("pool").classList.contains("hide"))renderPool()},10000);
 
 // ---------- хост ----------
 async function startHost(){
-  closePool();await ready;mode="host";target=null;thieves={};show("game");$("title").textContent="Ваш рудник";say("");
-  if(Net.on){try{room=await Net.join(S.id,onHost)}catch(e){room=null}}
+  closePool();await ready;mode="host";target=null;thieves={};show("game");$("title").textContent="Рудник · код "+S.code;say("");
+  if(Net.on){try{room=await Net.join(S.code,onHost,true)}catch(e){room=null;say("Онлайн недоступен, игра без сети.")}}
   beat();hb=setInterval(beat,15000);
   sweep=setInterval(()=>{let ch=false;for(const k in thieves)if(Date.now()-thieves[k].seen>25000){delete thieves[k];ch=true}if(ch)render()},3000);
   render();
 }
-function beat(){if(Net.on)Net.beat(S.id,{name:S.name,seen:Date.now()})}
+function beat(){if(Net.on)Net.beat(S.code,{name:S.name,seen:Date.now()})}
 const prog=()=>emit({t:"prog",n:S.progress,drop:!!S.drop});
 function onHost(d){
   if(!d||!d.id)return;
@@ -253,16 +303,17 @@ function kick(id){
 // ---------- вор ----------
 async function startSteal(p){
   if((S.bans[p.id]||0)>Date.now())return;
-  closePool();mode="steal";target=p;gotProg=false;vProg=0;vDrop=false;show("game");
+  closePool();await ready;if(!Net.on){$("menuMsg").textContent="Онлайн не настроен.";return}mode="steal";target=p;gotProg=false;vProg=0;vDrop=false;show("game");
   $("title").textContent="Рудник: "+(p.name||"Игрок");say("Подкрадываемся…");
-  try{room=await Net.join(p.id,onThief)}catch(e){leave("Не удалось подключиться.");return}
+  try{room=await Net.join(p.id,onThief,false)}catch(e){leave("Не удалось подключиться.");return}
   const enter=()=>emit({t:"enter",id:S.id,name:S.name});
   enter();hb=setInterval(enter,8000);
   setTimeout(()=>{if(mode==="steal"&&!gotProg)say("Хост не отвечает — возможно, он ушёл.")},7000);
   render();
 }
 function onThief(d){
-  if(!d||(d.to&&d.to!==S.id))return;
+  if(mode!=="steal"||!d||(d.to&&d.to!==S.id))return;
+  if(d.t==="gone"){leave("Хост ушёл.");return}
   if(d.t==="prog"){gotProg=true;vProg=d.n;vDrop=!!d.drop;if(/^(Подкрад|Хост)/.test($("msg").textContent))say("");render()}
   else if(d.t==="ore"){
     S.inv[d.ore]=(S.inv[d.ore]||0)+1;save();say("Украдено: "+d.ore+"!");
@@ -276,13 +327,13 @@ function onThief(d){
 $("bBack").onclick=()=>leave();
 function leave(text){
   if(mode==="steal")emit({t:"leave",id:S.id});
-  if(mode==="host"&&Net.on)Net.drop(S.id);
+  if(mode==="host"&&Net.on)Net.drop(S.code);
   clearInterval(hb);clearInterval(sweep);
   if(room){try{room.leave()}catch(e){}room=null}
   mode="menu";target=null;thieves={};show("menu");closeInv();
   $("menuMsg").textContent=text||"";
 }
-addEventListener("pagehide",()=>{if(mode==="host"&&Net.on)Net.drop(S.id);if(mode==="steal")emit({t:"leave",id:S.id})});
+addEventListener("pagehide",()=>{if(mode==="host"&&Net.on)Net.drop(S.code);if(mode==="steal")emit({t:"leave",id:S.id})});
 
 $("rock").onclick=()=>{
   regen();
